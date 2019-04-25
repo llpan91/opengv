@@ -48,10 +48,6 @@ bool loadMeasurement(const string str_match_path, std::vector<Eigen::Vector2d>& 
   fclose(file);
   return true;
 }
-Eigen::Vector2d pixel2camera(Eigen::Vector2d& p_p, Eigen::Matrix3d k) {
-  Eigen::Vector2d pt_cam((p_p(0) - k(0, 2))  / k(0, 0), (p_p(1) - k(1, 2))  / k(1, 1));
-  return pt_cam;
-}
 
 Eigen::Vector2d undistortPoint(const Eigen::Vector2d pt2d_pixel,
 			       const Eigen::Matrix3d& camera_intrinsic,
@@ -103,9 +99,9 @@ void normalizedPt(const std::vector<Eigen::Vector2d>& pts_2d, const Eigen::Matri
 
   for(int i = 0; i < pts_2d.size(); i++){
     Eigen::Vector2d pt_pixel = pts_2d[i];
-    // Eigen::Vector2d pt_cam = undistortPoint(pt_pixel, camera_intrinsic, distortion);
+    Eigen::Vector2d pt_cam = undistortPoint(pt_pixel, camera_intrinsic, distortion);
     // debug 
-    Eigen::Vector2d pt_cam = pixel2camera(pt_pixel, camera_intrinsic);
+    // Eigen::Vector2d pt_cam = pixel2camera(pt_pixel, camera_intrinsic);
     // std::cout << " pt_cam = " << pt_cam << std::endl; 
     // std::cout << " pt_cam2 = " << pt_cam2 << std::endl; 
     

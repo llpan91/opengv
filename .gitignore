@@ -1,5 +1,11 @@
-lib
-build
-*.mexa64
-*.pyc
-.vscode
+# build
+bin/
+lib/
+build/
+vocabulary/
+
+# IDE
+cmake-build-debug/
+.idea/
+.kdev4/
+*.kdev4

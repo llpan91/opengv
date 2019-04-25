@@ -247,6 +247,13 @@ IF (BUILD_TESTS)
   add_test(NAME test_relative_pose_rotationOnly_sac
     WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
     COMMAND test_relative_pose_rotationOnly_sac)
+    
+  # add by llpan
+  add_executable( test_stereo_camera_rotation test/test_stereo_camera_rotation.cpp )
+  target_link_libraries( test_stereo_camera_rotation opengv random_generators )
+  add_test(NAME test_stereo_camera_rotation
+    WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    COMMAND test_stereo_camera_rotation)
 
   add_executable( test_relative_pose_sac test/test_relative_pose_sac.cpp )
   target_link_libraries( test_relative_pose_sac opengv random_generators )
@@ -317,6 +324,7 @@ IF (BUILD_TESTS)
     test_relative_pose
     test_relative_pose_rotationOnly
     test_relative_pose_rotationOnly_sac
+    test_stereo_camera_rotation # add by llpan
     test_relative_pose_sac
     test_noncentral_relative_pose
     test_noncentral_relative_pose_sac
