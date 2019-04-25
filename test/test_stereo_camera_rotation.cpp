@@ -23,6 +23,9 @@ using namespace std;
 using namespace Eigen;
 using namespace opengv;
 
+#define degreesToRadians(x) (M_PI * x / 180.0)
+#define radiansToDegrees(x) (x * (180.0/M_PI))
+
 bool loadMeasurement(const string str_match_path, std::vector<Eigen::Vector2d>& pre_pt2ds, 
 		     std::vector<Eigen::Vector2d>& cur_pt2ds){
   pre_pt2ds.clear();
@@ -78,7 +81,6 @@ Eigen::Vector2d undistortPoint(const Eigen::Vector2d pt2d_pixel,
     // compensate distortion iteratively
     for( int j = 0; ; j++ ){
       if (j >= max_count) break;
-      // if (error < epsilon) break;
       double r2 = x*x + y*y;
       double icdist = (1 + ((k[7]*r2 + k[6])*r2 + k[5])*r2)/(1 + ((k[4]*r2 + k[1])*r2 + k[0])*r2);
       double deltaX = 2*k[2]*x*y + k[3]*(r2 + 2*x*x)+ k[8]*r2+k[9]*r2*r2;
@@ -100,11 +102,6 @@ void normalizedPt(const std::vector<Eigen::Vector2d>& pts_2d, const Eigen::Matri
   for(int i = 0; i < pts_2d.size(); i++){
     Eigen::Vector2d pt_pixel = pts_2d[i];
     Eigen::Vector2d pt_cam = undistortPoint(pt_pixel, camera_intrinsic, distortion);
-    // debug 
-    // Eigen::Vector2d pt_cam = pixel2camera(pt_pixel, camera_intrinsic);
-    // std::cout << " pt_cam = " << pt_cam << std::endl; 
-    // std::cout << " pt_cam2 = " << pt_cam2 << std::endl; 
-    
     Eigen::Vector3d pt_norm_cam = Eigen::Vector3d(pt_cam(0), pt_cam(1), 1.0);
     pt_norm_cam = pt_norm_cam/pt_norm_cam.norm();
     pts_3d.push_back(pt_norm_cam);
@@ -122,8 +119,7 @@ double evaluateRotationError(const Eigen::Matrix3d& rot_est, const Eigen::Matrix
   double d3 = error_R(0, 1) - error_R(1, 0);
   double dmag = sqrt(d1*d1 + d2*d2 + d3*d3);
   double phi = asin(dmag/2);
-  double deg = phi * 180.0/3.1415926;
-  return deg;
+  return radiansToDegrees(phi);
 }
 
 
@@ -153,31 +149,34 @@ int main(int argc, char **argv) {
   distortion2[3] = 0.0010;
 
   Eigen::Matrix3d cam15a_intrinsic, cam15b_intrinsic;
-  // MY00_15a
-  cam15a_intrinsic << 3744.9266, 0., 512.0034, 0., 3735.5891, 288.0368, 0.0, 0.0, 1.0;
-  // MY00_15b
-  cam15b_intrinsic << 3854.4260, 0., 526.8109, 0., 3835.6137, 312.4926, 0.0, 0.0, 1.0;  
+  cam15a_intrinsic << 3744.9266, 0., 512.0034, 0., 3735.5891, 288.0368, 0.0, 0.0, 1.0;	// MY00_15a
+  cam15b_intrinsic << 3854.4260, 0., 526.8109, 0., 3835.6137, 312.4926, 0.0, 0.0, 1.0;  // MY00_15b
   
   // rotation_pre_to_cur = > rotation_cam15a_to_cam15b
-  Eigen::Matrix3d rotation_pre_to_cur = (mat_cam15b_to_imu.inverse() * mat_cam15a_to_imu).block<3, 3>(0, 0);
-  std::cout << "rotation_pre_to_cur = " << std::endl << rotation_pre_to_cur << std::endl;
+  Eigen::Matrix3d R_cp = (mat_cam15b_to_imu.inverse() * mat_cam15a_to_imu).block<3, 3>(0, 0);
 
   std::vector<string> matches_paths;
   matches_paths.clear();
-  const string str_match_path = "/home/pan/Desktop/stereo_data_test/matching_results/";
-  for(int i = 0; i < 31; i++){
-    int idx = 2 * i +1;
-    string cur_str_path = str_match_path + "MY00_15a_" + to_string(idx) + ".txt";
+//   const string str_match_path = "/home/pan/Desktop/stereo_data_test/matching_results/";
+//   for(int i = 0; i < 31; i++){
+//     int idx = 2 * i +1;
+//     string cur_str_path = str_match_path + "MY00_15a_" + to_string(idx) + ".txt";
+//     matches_paths.push_back(cur_str_path);
+//   }
+  
+  const string str_match_path = "/home/pan/Desktop/stereo_data_test/stereo_match_vo/";
+  for(int i = 0; i < 30; i++){
+    int idx = 2 * i;
+    string cur_str_path = str_match_path  + to_string(idx) + ".txt";
     matches_paths.push_back(cur_str_path);
   }
-  
+
   std::cout << " matches_paths size = " << matches_paths.size() << std::endl;
   
   double max_error_ransac = 0.0, min_error_ransac = 10.0, max_error_lmeds = 0.0, min_error_lmeds = 10.0; 
   double ave_error_ransac = 0.0, ave_error_lmeds = 0.0;
   int ave_inlier_num_ransac = 0, ave_inlier_num_lmeds = 0;
   int ave_iter_num_ransac = 0, ave_iter_num_lmeds = 0;
-  
   int matches_num = 0;
 
   int sum_time = 0;
@@ -213,7 +212,7 @@ int main(int argc, char **argv) {
 	ransac.computeModel(0);
 	sum_time++;
 	Eigen::Matrix3d R_est = ransac.model_coefficients_;
-	double deg_ransac = evaluateRotationError(R_est, rotation_pre_to_cur);
+	double deg_ransac = evaluateRotationError(R_est, R_cp);
 	int iteration_num_ransac = ransac.iterations_;
 	int inlier_num_ransac = ransac.inliers_.size();
 	
@@ -226,7 +225,7 @@ int main(int argc, char **argv) {
 	// lmeds method
 	lmeds.computeModel(0);
 	R_est = lmeds.model_coefficients_;
-	double deg_lmed = evaluateRotationError(R_est, rotation_pre_to_cur);
+	double deg_lmed = evaluateRotationError(R_est, R_cp);
 	int iteration_num_lmed = lmeds.iterations_;
 	int inlier_num_lmed = lmeds.inliers_.size();
 	
