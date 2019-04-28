@@ -47,12 +47,12 @@ bool loadMeasurement(const string str_match_path, std::vector<Eigen::Vector2d>& 
     cur_pt2ds.push_back(cur_pt2d);
   }
 
-  std::cerr << "Loaded " << str_match_path << ": " << pre_pt2ds.size() << " poses." << std::endl;
+  // std::cerr << "Loaded " << str_match_path << ": " << pre_pt2ds.size() << " poses." << std::endl;
   fclose(file);
   return true;
 }
 
-Eigen::Vector2d undistortPoint(const Eigen::Vector2d pt2d_pixel,
+Eigen::Vector2d undistortPoint(const Eigen::Vector2d& pt2d_pixel,
 			       const Eigen::Matrix3d& camera_intrinsic,
 			       const std::vector<double>& distortion,
 			       int max_count = 20, float epsilon = 0.01,
@@ -65,8 +65,8 @@ Eigen::Vector2d undistortPoint(const Eigen::Vector2d pt2d_pixel,
     double cx = camera_intrinsic(0, 2), cy = camera_intrinsic(1, 2);
     double ifx = 1. / fx, ify = 1. / fy;
 
-    Eigen::Matrix3d R = tform.block<3, 3>(0, 0);
-    Eigen::Vector3d t = tform.block<3, 1>(0, 3);
+    Eigen::Matrix3d R_mat = tform.block<3, 3>(0, 0);
+    Eigen::Vector3d t_mat = tform.block<3, 1>(0, 3);
 
     double x = (pt2d_pixel(0) - cx)*ifx;
     double y = (pt2d_pixel(1) - cy)*ify;
@@ -88,9 +88,9 @@ Eigen::Vector2d undistortPoint(const Eigen::Vector2d pt2d_pixel,
       x = (x0 - deltaX)*icdist;
       y = (y0 - deltaY)*icdist;
     }
-    double xx = R(0, 0)*x + R(0, 1)*y + R(0, 2);
-    double yy = R(1, 0)*x + R(1, 1)*y + R(1, 2);
-    double ww = 1.0/(R(2, 0)*x + R(2, 1)*y + R(2, 2));
+    double xx = R_mat(0, 0)*x + R_mat(0, 1)*y + R_mat(0, 2) + t_mat(0);
+    double yy = R_mat(1, 0)*x + R_mat(1, 1)*y + R_mat(1, 2) + t_mat(1);
+    double ww = 1.0/(R_mat(2, 0)*x + R_mat(2, 1)*y + R_mat(2, 2) + t_mat(2));
     x = xx * ww, y = yy * ww;
     Eigen::Vector2d pt2d_out(x, y);
     return pt2d_out;
@@ -107,9 +107,8 @@ void normalizedPt(const std::vector<Eigen::Vector2d>& pts_2d, const Eigen::Matri
     pts_3d.push_back(pt_norm_cam);
   }
   
-  std::cout << "pts_3d size = " << pts_3d.size() << std::endl;
+  // std::cout << "pts_3d size = " << pts_3d.size() << std::endl;
 }
-
 
 double evaluateRotationError(const Eigen::Matrix3d& rot_est, const Eigen::Matrix3d& rot_gt){
   
@@ -158,11 +157,11 @@ int main(int argc, char **argv) {
   std::vector<string> matches_paths;
   matches_paths.clear();
 //   const string str_match_path = "/home/pan/Desktop/stereo_data_test/matching_results/";
-//   for(int i = 0; i < 31; i++){
-//     int idx = 2 * i +1;
-//     string cur_str_path = str_match_path + "MY00_15a_" + to_string(idx) + ".txt";
-//     matches_paths.push_back(cur_str_path);
-//   }
+//    for(int i = 0; i < 31; i++){
+//      int idx = 2 * i +1;
+//      string cur_str_path = str_match_path + "MY00_15a_" + to_string(idx) + ".txt";
+//      matches_paths.push_back(cur_str_path);
+//    }
   
   const string str_match_path = "/home/pan/Desktop/stereo_data_test/stereo_match_vo/";
   for(int i = 0; i < 30; i++){
@@ -180,8 +179,12 @@ int main(int argc, char **argv) {
   int matches_num = 0;
 
   int sum_time = 0;
+  int less_05 = 0;
+  int large_05 = 0;
+  int large_1 = 0;
+  int large_15 = 0;
   for(int i = 0; i < 31; i++){
-    std::cout << "=================  test result " << i << " ================= " << std::endl;
+    // std::cout << "=================  test result " << i << " ================= " << std::endl;
     std::vector<Eigen::Vector2d> pre_pt2ds, cur_pt2ds;
     bool load_flag = loadMeasurement(matches_paths[i], pre_pt2ds, cur_pt2ds);
     if(load_flag){
@@ -189,7 +192,7 @@ int main(int argc, char **argv) {
       normalizedPt(pre_pt2ds, cam15a_intrinsic, distortion1, pre_pts3d);
       normalizedPt(cur_pt2ds, cam15b_intrinsic, distortion2, cur_pts3d);
       bearingVectors_t bearingVectors1, bearingVectors2;
-      for(int i = 0; i <  pre_pts3d.size(); i++){
+      for(int i = 0; i < pre_pts3d.size(); i++){
 	bearingVectors2.push_back(pre_pts3d[i]);
 	bearingVectors1.push_back(cur_pts3d[i]);
       }
@@ -215,7 +218,11 @@ int main(int argc, char **argv) {
 	double deg_ransac = evaluateRotationError(R_est, R_cp);
 	int iteration_num_ransac = ransac.iterations_;
 	int inlier_num_ransac = ransac.inliers_.size();
-	
+	std::cout << "deg_ransac = " << deg_ransac << std::endl;
+	if(deg_ransac > 1.5) large_15++;
+	else if(deg_ransac > 1.0 && deg_ransac < 1.5) large_1++;
+	else if(deg_ransac > 0.5 && deg_ransac < 1.0) large_05++;
+	else if(deg_ransac < 0.5) less_05++;
 	if(deg_ransac > max_error_ransac) max_error_ransac = deg_ransac;
 	if(deg_ransac < min_error_ransac) min_error_ransac = deg_ransac;
 	ave_error_ransac += deg_ransac;
@@ -245,8 +252,12 @@ int main(int argc, char **argv) {
   ave_inlier_num_lmeds *= (1.0/sum_time);
   ave_iter_num_lmeds *= (1.0/sum_time);
   
-  std::cout << "ave matches = " << matches_num/31.0 << std::endl;
+  std::cout << " less_05 = " << less_05 << std::endl;
+  std::cout << " large_05 = " << large_05 << std::endl;
+  std::cout << " large_1 = " << large_1 << std::endl;
+  std::cout << " large_15 = " << large_15 << std::endl;
   
+  std::cout << "ave matches = " << matches_num/31.0 << std::endl;
   std::cout << "ave_error_ransac = " << ave_error_ransac << std::endl;
   std::cout << "max_error_ransac = " << max_error_ransac << std::endl;
   std::cout << "min_error_ransac = " << min_error_ransac << std::endl;
@@ -259,4 +270,5 @@ int main(int argc, char **argv) {
   std::cout << "min_error_lmeds = " << min_error_lmeds << std::endl;
   std::cout << "ave_inlier_num_lmeds = " << ave_inlier_num_lmeds << std::endl;
   std::cout << "ave_iter_num_lmeds = " << ave_iter_num_lmeds << std::endl;
+
 }
